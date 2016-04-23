@@ -48,6 +48,8 @@
 @property (nonatomic, strong) UIImage *image;
 @property (nonatomic, strong) UITextView *textView;
 @property (nonatomic, assign) CGFloat originalFrameYPos;
+@property (nonatomic, strong) NSDate *touchesBeganDate;
+
 @end
 
 #pragma mark -
@@ -74,23 +76,34 @@
 
 - (void)configure
 {
+
     // init the private arrays
     self.pathArray = [NSMutableArray array];
     self.bufferArray = [NSMutableArray array];
-    
+
     // set the default values for the public properties
     self.lineColor = kDefaultLineColor;
     self.lineWidth = kDefaultLineWidth;
     self.lineAlpha = kDefaultLineAlpha;
 
     self.drawMode = ACEDrawingModeOriginalSize;
-    
+
     // set the transparent background
     self.backgroundColor = [UIColor clearColor];
-    
+
     self.originalFrameYPos = self.frame.origin.y;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardDidShow:) name:UIKeyboardDidShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardDidHide:) name:UIKeyboardDidHideNotification object:nil];
+}
+
+- (void)handleTap:(UITapGestureRecognizer *)gesture
+{
+//    NSLog(@"TAPPED");
+}
+
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture
+{
+//    NSLog(@"Long pressed");
 }
 
 - (UIImage *)prev_image {
@@ -114,7 +127,7 @@
         case ACEDrawingModeOriginalSize:
             [self.image drawAtPoint:CGPointZero];
             break;
-            
+
         case ACEDrawingModeScale:
             [self.image drawInRect:self.bounds];
             break;
@@ -134,13 +147,13 @@
 {
     // init a context
     UIGraphicsBeginImageContextWithOptions(self.bounds.size, NO, 0.0);
-    
+
     if (redraw) {
         // erase the previous image
         self.image = nil;
-        
+
         // load previous image (if returning to screen)
-        
+
         switch (self.drawMode) {
             case ACEDrawingModeOriginalSize:
                 [[self.backgroundImage copy] drawAtPoint:CGPointZero];
@@ -149,18 +162,18 @@
                 [[self.backgroundImage copy] drawInRect:self.bounds];
                 break;
         }
-        
+
         // I need to redraw all the lines
         for (id<ACEDrawingTool> tool in self.pathArray) {
             [tool draw];
         }
-        
+
     } else {
         // set the draw point
         [self.image drawAtPoint:CGPointZero];
         [self.currentTool draw];
     }
-    
+
     // store the image
     self.image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
@@ -170,15 +183,15 @@
 {
     // update the image
     [self updateCacheImage:NO];
-    
+
     // clear the redo queue
     [self.bufferArray removeAllObjects];
-    
+
     // call the delegate
     if ([self.delegate respondsToSelector:@selector(drawingView:didEndDrawUsingTool:)]) {
         [self.delegate drawingView:self didEndDrawUsingTool:self.currentTool];
     }
-    
+
     // clear the current tool
     self.currentTool = nil;
 }
@@ -186,7 +199,7 @@
 - (void)setCustomDrawTool:(id<ACEDrawingTool>)customDrawTool
 {
     _customDrawTool = customDrawTool;
-    
+
     if (customDrawTool != nil) {
         self.drawTool = ACEDrawingToolTypeCustom;
     }
@@ -199,15 +212,10 @@
         {
             return ACE_AUTORELEASE([ACEDrawingPenTool new]);
         }
-            
+
         case ACEDrawingToolTypeLine:
         {
             return ACE_AUTORELEASE([ACEDrawingLineTool new]);
-        }
-            
-        case ACEDrawingToolTypeArrow:
-        {
-            return ACE_AUTORELEASE([ACEDrawingArrowTool new]);
         }
 
         case ACEDrawingToolTypeText:
@@ -226,33 +234,33 @@
             tool.fill = NO;
             return tool;
         }
-            
+
         case ACEDrawingToolTypeRectagleFill:
         {
             ACEDrawingRectangleTool *tool = ACE_AUTORELEASE([ACEDrawingRectangleTool new]);
             tool.fill = YES;
             return tool;
         }
-            
+
         case ACEDrawingToolTypeEllipseStroke:
         {
             ACEDrawingEllipseTool *tool = ACE_AUTORELEASE([ACEDrawingEllipseTool new]);
             tool.fill = NO;
             return tool;
         }
-            
+
         case ACEDrawingToolTypeEllipseFill:
         {
             ACEDrawingEllipseTool *tool = ACE_AUTORELEASE([ACEDrawingEllipseTool new]);
             tool.fill = YES;
             return tool;
         }
-            
+
         case ACEDrawingToolTypeEraser:
         {
             return ACE_AUTORELEASE([ACEDrawingEraserTool new]);
         }
-            
+
         case ACEDrawingToolTypeCustom:
         {
             return self.customDrawTool;
@@ -269,28 +277,30 @@
         [self commitAndHideTextEntry];
         return;
     }
-    
+
+    self.touchesBeganDate = [NSDate new];
+
     // add the first touch
     UITouch *touch = [touches anyObject];
     previousPoint1 = [touch previousLocationInView:self];
     currentPoint = [touch locationInView:self];
-    
+
     // init the bezier path
     self.currentTool = [self toolWithCurrentSettings];
     self.currentTool.lineWidth = self.lineWidth;
     self.currentTool.lineColor = self.lineColor;
     self.currentTool.lineAlpha = self.lineAlpha;
-    
+
     if ([self.currentTool class] == [ACEDrawingTextTool class]) {
         [self initializeTextBox:currentPoint WithMultiline:NO];
     } else if([self.currentTool class] == [ACEDrawingMultilineTextTool class]) {
         [self initializeTextBox:currentPoint WithMultiline:YES];
     } else {
         [self.pathArray addObject:self.currentTool];
-        
+
         [self.currentTool setInitialPoint:currentPoint];
     }
-    
+
     // call the delegate
     if ([self.delegate respondsToSelector:@selector(drawingView:willBeginDrawUsingTool:)]) {
         [self.delegate drawingView:self willBeginDrawUsingTool:self.currentTool];
@@ -299,22 +309,31 @@
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
 {
+    NSTimeInterval timeInterval = fabs([self.touchesBeganDate timeIntervalSinceNow]);
+//    NSLog(@"%f", timeInterval);
+    if (timeInterval >= 0.15) {
+        // call the delegate
+        if ([self.delegate respondsToSelector:@selector(drawingView:didHitDrawThresholdUsingTool:)]) {
+            [self.delegate drawingView:self didHitDrawThresholdUsingTool:self.currentTool];
+        }
+    }
+
     // save all the touches in the path
     UITouch *touch = [touches anyObject];
-    
+
     previousPoint2 = previousPoint1;
     previousPoint1 = [touch previousLocationInView:self];
     currentPoint = [touch locationInView:self];
-    
+
     if ([self.currentTool isKindOfClass:[ACEDrawingPenTool class]]) {
         CGRect bounds = [(ACEDrawingPenTool*)self.currentTool addPathPreviousPreviousPoint:previousPoint2 withPreviousPoint:previousPoint1 withCurrentPoint:currentPoint];
-        
+
         CGRect drawBox = bounds;
         drawBox.origin.x -= self.lineWidth * 2.0;
         drawBox.origin.y -= self.lineWidth * 2.0;
         drawBox.size.width += self.lineWidth * 4.0;
         drawBox.size.height += self.lineWidth * 4.0;
-        
+
         [self setNeedsDisplayInRect:drawBox];
     }
     else if ([self.currentTool isKindOfClass:[ACEDrawingTextTool class]]) {
@@ -324,14 +343,16 @@
         [self.currentTool moveFromPoint:previousPoint1 toPoint:currentPoint];
         [self setNeedsDisplay];
     }
-    
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
+    // Reset
+    self.touchesBeganDate = nil;
+
     // make sure a point is recorded
     [self touchesMoved:touches withEvent:event];
-    
+
     if ([self.currentTool isKindOfClass:[ACEDrawingTextTool class]]) {
         [self startTextEntry];
     }
@@ -361,24 +382,24 @@
         self.textView.layer.borderColor = [[UIColor grayColor] CGColor];
         self.textView.layer.cornerRadius = 8;
         [self.textView setContentInset: UIEdgeInsetsZero];
-        
-        
+
+
         [self addSubview:self.textView];
     }
-    
+
     int calculatedFontSize = self.lineWidth * 3; //3 is an approximate size factor
-    
+
     [self.textView setFont:[UIFont systemFontOfSize:calculatedFontSize]];
     self.textView.textColor = self.lineColor;
     self.textView.alpha = self.lineAlpha;
-    
+
     int defaultWidth = 200;
     int defaultHeight = calculatedFontSize * 2;
     int initialYPosition = startingPoint.y - (defaultHeight/2);
-    
+
     CGRect frame = CGRectMake(startingPoint.x, initialYPosition, defaultWidth, defaultHeight);
     frame = [self adjustFrameToFitWithinDrawingBounds:frame];
-    
+
     self.textView.frame = frame;
     self.textView.text = @"";
     self.textView.hidden = NO;
@@ -403,7 +424,7 @@
     if (self.textView.contentSize.height > frame.size.height) {
         frame.size.height = self.textView.contentSize.height;
     }
-    
+
     self.textView.frame = frame;
 }
 
@@ -412,30 +433,30 @@
 }
 
 -(void)resizeTextViewFrame: (CGPoint)adjustedSize {
-    
+
     int minimumAllowedHeight = self.textView.font.pointSize * 2;
     int minimumAllowedWidth = self.textView.font.pointSize * 0.5;
-    
+
     CGRect frame = self.textView.frame;
-    
+
     //adjust height
     int adjustedHeight = adjustedSize.y - self.textView.frame.origin.y;
     if (adjustedHeight > minimumAllowedHeight) {
         frame.size.height = adjustedHeight;
     }
-    
+
     //adjust width
     int adjustedWidth = adjustedSize.x - self.textView.frame.origin.x;
     if (adjustedWidth > minimumAllowedWidth) {
         frame.size.width = adjustedWidth;
     }
     frame = [self adjustFrameToFitWithinDrawingBounds:frame];
-    
+
     self.textView.frame = frame;
 }
 
 - (CGRect)adjustFrameToFitWithinDrawingBounds: (CGRect)frame {
-    
+
     //check that the frame does not go beyond bounds of parent view
     if ((frame.origin.x + frame.size.width) > self.frame.size.width) {
         frame.size.width = self.frame.size.width - frame.origin.x;
@@ -448,25 +469,25 @@
 
 - (void)commitAndHideTextEntry {
     [self.textView resignFirstResponder];
-    
+
     if ([self.textView.text length]) {
         UIEdgeInsets textInset = self.textView.textContainerInset;
         CGFloat additionalXPadding = 5;
         CGPoint start = CGPointMake(self.textView.frame.origin.x + textInset.left + additionalXPadding, self.textView.frame.origin.y + textInset.top);
         CGPoint end = CGPointMake(self.textView.frame.origin.x + self.textView.frame.size.width - additionalXPadding, self.textView.frame.origin.y + self.textView.frame.size.height);
-        
+
         ((ACEDrawingTextTool*)self.currentTool).attributedText = [self.textView.attributedText copy];
-        
+
         [self.pathArray addObject:self.currentTool];
-        
+
         [self.currentTool setInitialPoint:start]; //change this for precision accuracy of text location
         [self.currentTool moveFromPoint:start toPoint:end];
         [self setNeedsDisplay];
-        
+
         [self finishDrawing];
-        
+
     }
-    
+
     self.currentTool = nil;
     self.textView.hidden = YES;
     self.textView = nil;
@@ -533,10 +554,10 @@
 - (void)loadImage:(UIImage *)image
 {
     self.image = image;
-    
+
     //save the loaded image to persist after an undo step
     self.backgroundImage = [image copy];
-    
+
     // when loading an external image, I'm cleaning all the paths and the undo buffer
     [self.bufferArray removeAllObjects];
     [self.pathArray removeAllObjects];
@@ -549,11 +570,11 @@
     CGFloat imageScale;
     if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
         imageScale = [[UIScreen mainScreen] scale];
-        
+
     } else {
         imageScale = 1.0;
     }
-    
+
     UIImage *image = [UIImage imageWithData:imageData scale:imageScale];
     [self loadImage:image];
 }
@@ -630,12 +651,12 @@
     self.image = nil;
     self.backgroundImage = nil;
     self.customDrawTool = nil;
-    
+
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardDidShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardDidHideNotification object:nil];
-    
+
 #if !ACE_HAS_ARC
-    
+
     [super dealloc];
 #endif
 }
