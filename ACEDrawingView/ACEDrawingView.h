@@ -87,7 +87,7 @@ typedef NS_ENUM(NSUInteger, ACEDrawingMode) {
 
 @end
 
-#pragma mark - 
+#pragma mark -
 
 @interface ACEDrawingView (Deprecated)
 @property (nonatomic, strong) UIImage *prev_image DEPRECATED_MSG_ATTRIBUTE("Use 'backgroundImage' instead.");
@@ -100,5 +100,5 @@ typedef NS_ENUM(NSUInteger, ACEDrawingMode) {
 @optional
 - (void)drawingView:(ACEDrawingView *)view willBeginDrawUsingTool:(id<ACEDrawingTool>)tool;
 - (void)drawingView:(ACEDrawingView *)view didEndDrawUsingTool:(id<ACEDrawingTool>)tool;
-
+- (void)drawingView:(ACEDrawingView *)view didHitDrawThresholdUsingTool:(id<ACEDrawingTool>)tool;
 @end
