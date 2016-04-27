@@ -28,7 +28,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
-#define kDefaultLineColor       [UIColor blackColor]
+#define kDefaultLineColor       [UIColor colorWithRed:0.816  green:0.008  blue:0.106 alpha:1]
 #define kDefaultLineWidth       10.0f;
 #define kDefaultLineAlpha       1.0f
 
